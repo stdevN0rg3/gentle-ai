@@ -106,7 +106,7 @@ func installHintGo(profile PlatformProfile) string {
 	}
 }
 
-// installHintNix returns the install hint for nix package manager.
+// installHintNix returns the install hint for Nix (Linux only).
 func installHintNix() string {
 	return "curl -L https://nixos.org/nix/install | sh"
 }
@@ -242,10 +242,7 @@ func installCommandsGo(profile PlatformProfile) [][]string {
 }
 
 func installCommandsNix(profile PlatformProfile) [][]string {
-	// nix installation via the official installer script
-	return [][]string{
-		{"bash", "-c", "curl -L https://nixos.org/nix/install | sh"},
-	}
+	return [][]string{{"bash", "-c", "curl -L https://nixos.org/nix/install | sh"}}
 }
 
 // FormatMissingDepsMessage creates a human-readable message about missing dependencies.

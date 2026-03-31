@@ -38,6 +38,10 @@ jobs:
         env:
           RUN_FULL_E2E: "1"
           RUN_BACKUP_TESTS: "1"
+<<<<<<< HEAD
+=======
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+>>>>>>> origin/main
         run: |
           cd e2e
           chmod +x docker-test.sh

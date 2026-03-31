@@ -1642,6 +1642,160 @@ func TestStripBareOrchestratorSection_DoesNotStripIfMarkersPresent(t *testing.T)
 	_ = result
 }
 
+// ---------------------------------------------------------------------------
+// Task 6: StrictTDD marker injected into system prompt files
+// ---------------------------------------------------------------------------
+
+// TestInjectStrictTDDEnabledInjectsMarkerIntoClaude verifies that when
+// InjectOptions.StrictTDD = true, the injected content in CLAUDE.md contains
+// the <!-- gentle-ai:strict-tdd-mode --> marker with its content.
+func TestInjectStrictTDDEnabledInjectsMarkerIntoClaude(t *testing.T) {
+	home := t.TempDir()
+
+	opts := InjectOptions{StrictTDD: true}
+	result, err := Inject(home, claudeAdapter(), "", opts)
+	if err != nil {
+		t.Fatalf("Inject(claude, StrictTDD=true) error = %v", err)
+	}
+	if !result.Changed {
+		t.Fatal("Inject() changed = false")
+	}
+
+	content, err := os.ReadFile(filepath.Join(home, ".claude", "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(CLAUDE.md) error = %v", err)
+	}
+
+	text := string(content)
+	if !strings.Contains(text, "<!-- gentle-ai:strict-tdd-mode -->") {
+		t.Fatal("CLAUDE.md missing <!-- gentle-ai:strict-tdd-mode --> open marker")
+	}
+	if !strings.Contains(text, "<!-- /gentle-ai:strict-tdd-mode -->") {
+		t.Fatal("CLAUDE.md missing <!-- /gentle-ai:strict-tdd-mode --> close marker")
+	}
+	if !strings.Contains(text, "Strict TDD Mode: enabled") {
+		t.Fatal("CLAUDE.md missing 'Strict TDD Mode: enabled' content")
+	}
+}
+
+// TestInjectStrictTDDDisabledDoesNotInjectMarker verifies that when
+// InjectOptions.StrictTDD = false (default), the strict-tdd marker is NOT injected.
+func TestInjectStrictTDDDisabledDoesNotInjectMarker(t *testing.T) {
+	home := t.TempDir()
+
+	// Default (no opts) — strict TDD disabled.
+	_, err := Inject(home, claudeAdapter(), "")
+	if err != nil {
+		t.Fatalf("Inject(claude, default) error = %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(home, ".claude", "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(CLAUDE.md) error = %v", err)
+	}
+
+	text := string(content)
+	if strings.Contains(text, "<!-- gentle-ai:strict-tdd-mode -->") {
+		t.Fatal("CLAUDE.md should NOT contain strict-tdd-mode marker when StrictTDD=false")
+	}
+}
+
+// TestInjectStrictTDDIsIdempotent verifies that injecting with StrictTDD=true
+// twice does not duplicate the marker.
+func TestInjectStrictTDDIsIdempotent(t *testing.T) {
+	home := t.TempDir()
+
+	opts := InjectOptions{StrictTDD: true}
+
+	first, err := Inject(home, claudeAdapter(), "", opts)
+	if err != nil {
+		t.Fatalf("Inject() first error = %v", err)
+	}
+	if !first.Changed {
+		t.Fatal("first Inject() changed = false")
+	}
+
+	second, err := Inject(home, claudeAdapter(), "", opts)
+	if err != nil {
+		t.Fatalf("Inject() second error = %v", err)
+	}
+	if second.Changed {
+		t.Fatal("second Inject() changed = true — strict-tdd marker was duplicated")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Task 1: All files from each skill directory are copied (not just SKILL.md)
+// ---------------------------------------------------------------------------
+
+// TestInjectCopiesAllFilesFromSkillDirectory verifies that Inject() copies
+// ALL .md files from each skill directory, not just SKILL.md.
+// Specifically, sdd-apply/strict-tdd.md and sdd-verify/strict-tdd-verify.md
+// must be written to disk alongside their SKILL.md files.
+func TestInjectCopiesAllFilesFromSkillDirectory(t *testing.T) {
+	home := t.TempDir()
+
+	result, err := Inject(home, opencodeAdapter(), "")
+	if err != nil {
+		t.Fatalf("Inject() error = %v", err)
+	}
+	if !result.Changed {
+		t.Fatal("Inject() changed = false")
+	}
+
+	skillsDir := filepath.Join(home, ".config", "opencode", "skills")
+
+	tests := []struct {
+		skill string
+		file  string
+	}{
+		{"sdd-apply", "SKILL.md"},
+		{"sdd-apply", "strict-tdd.md"},
+		{"sdd-verify", "SKILL.md"},
+		{"sdd-verify", "strict-tdd-verify.md"},
+	}
+
+	for _, tt := range tests {
+		path := filepath.Join(skillsDir, tt.skill, tt.file)
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			t.Errorf("skill file %q/%q not found on disk: %v", tt.skill, tt.file, statErr)
+			continue
+		}
+		if info.Size() == 0 {
+			t.Errorf("skill file %q/%q is empty", tt.skill, tt.file)
+		}
+	}
+}
+
+// TestInjectCopiesAllFilesReportedInResult verifies that all skill files
+// (including extra files beyond SKILL.md) are included in result.Files.
+func TestInjectCopiesAllFilesReportedInResult(t *testing.T) {
+	home := t.TempDir()
+
+	result, err := Inject(home, opencodeAdapter(), "")
+	if err != nil {
+		t.Fatalf("Inject() error = %v", err)
+	}
+
+	skillsDir := filepath.Join(home, ".config", "opencode", "skills")
+	wantPaths := []string{
+		filepath.Join(skillsDir, "sdd-apply", "strict-tdd.md"),
+		filepath.Join(skillsDir, "sdd-verify", "strict-tdd-verify.md"),
+	}
+
+	resultSet := make(map[string]bool, len(result.Files))
+	for _, f := range result.Files {
+		resultSet[f] = true
+	}
+
+	for _, want := range wantPaths {
+		if !resultSet[want] {
+			t.Errorf("expected %q in result.Files, but it was not found", want)
+		}
+	}
+}
+
 // TestInjectClaudeDeduplicatesBareOrchestratorAtBeginning verifies that a bare
 // orchestrator section at the very START of CLAUDE.md is handled correctly.
 func TestInjectClaudeDeduplicatesBareOrchestratorAtBeginning(t *testing.T) {
@@ -2676,14 +2830,15 @@ func TestInjectCursorWritesSubAgentFiles(t *testing.T) {
 		}
 	}
 
-	// Verify readonly flags
+	// Verify readonly flags: sdd-explore and sdd-verify must use readonly: false
+	// so they can use terminal commands and MCP tools (issue #156).
 	for _, phase := range []string{"sdd-explore", "sdd-verify"} {
 		content, err := os.ReadFile(filepath.Join(agentsDir, phase+".md"))
 		if err != nil {
 			t.Fatalf("ReadFile(%s) error = %v", phase, err)
 		}
-		if !strings.Contains(string(content), "readonly: true") {
-			t.Fatalf("agent %s should have readonly: true", phase)
+		if !strings.Contains(string(content), "readonly: false") {
+			t.Fatalf("agent %s should have readonly: false (terminal/MCP access required)", phase)
 		}
 	}
 
@@ -3007,5 +3162,72 @@ func TestFindProjectRootAllMarkers(t *testing.T) {
 				t.Fatalf("findProjectRoot(%s) = %s, want %s", subDir, result, root)
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Fix: SDD post-check disk fallback on Windows
+// ---------------------------------------------------------------------------
+
+// TestInjectOpenCodePostCheckDiskFallback tests that the SDD post-check
+// correctly falls back to reading from disk when the in-memory merged bytes
+// are stale or empty. This simulates the Windows scenario where os.ReadFile
+// returns stale data due to NTFS caching, but the file on disk is correct.
+func TestInjectOpenCodePostCheckDiskFallback(t *testing.T) {
+	home := t.TempDir()
+
+	// Pre-create a minimal config file with sdd-orchestrator already present.
+	// This simulates a previous successful install where the file on disk
+	// is correct but in-memory buffer might be stale.
+	settingsPath := filepath.Join(home, ".config", "opencode", "opencode.json")
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	// Write a config that already has sdd-orchestrator (simulating previous install)
+	existingConfig := `{
+  "agent": {
+    "gentleman": {
+      "description": "Gentleman",
+      "mode": "primary"
+    },
+    "sdd-orchestrator": {
+      "description": "SDD Orchestrator",
+      "mode": "primary"
+    }
+  }
+}`
+	if err := os.WriteFile(settingsPath, []byte(existingConfig), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	// Mock npm to not be available (so we skip plugin installation)
+	origNpmLookPath := npmLookPath
+	npmLookPath = func(string) (string, error) {
+		return "", fmt.Errorf("npm not found")
+	}
+	t.Cleanup(func() { npmLookPath = origNpmLookPath })
+
+	// Run Inject with SDD mode single
+	result, err := Inject(home, opencodeAdapter(), model.SDDModeSingle)
+	if err != nil {
+		// This is the bug: on Windows, even with correct file on disk,
+		// the post-check may fail if in-memory buffer is stale.
+		// The fix adds a disk fallback, so this should NOT fail.
+		t.Fatalf("Inject() error = %v (post-check should pass with disk fallback)", err)
+	}
+
+	// Verify that the result indicates the file was changed (merged successfully)
+	if !result.Changed {
+		t.Log("Note: result.Changed = false, but that's OK for idempotent runs")
+	}
+
+	// Verify the file on disk still has sdd-orchestrator
+	diskContent, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !strings.Contains(string(diskContent), "sdd-orchestrator") {
+		t.Fatal("File on disk lost sdd-orchestrator after inject")
 	}
 }

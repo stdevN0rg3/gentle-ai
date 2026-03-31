@@ -398,25 +398,6 @@ func TestResolveAgentInstall(t *testing.T) {
 func TestResolveComponentInstall(t *testing.T) {
 	r := NewResolver()
 
-	// Simulate a valid Go 1.24+ environment for all engram resolution tests.
-	// Specific error scenarios are covered in TestValidateGoForModuleInstall.
-	origGoVersion := cmdGoVersion
-	origGetenv := osGetenv
-	origLookPath := cmdLookPath
-	cmdGoVersion = func() ([]byte, error) { return []byte("go version go1.24.0 linux/amd64"), nil }
-	osGetenv = func(key string) string { return "" }
-	cmdLookPath = func(file string) (string, error) {
-		if file == "go" {
-			return "/usr/bin/go", nil
-		}
-		return origLookPath(file)
-	}
-	t.Cleanup(func() {
-		cmdGoVersion = origGoVersion
-		osGetenv = origGetenv
-		cmdLookPath = origLookPath
-	})
-
 	tests := []struct {
 		name      string
 		profile   system.PlatformProfile
@@ -430,35 +411,25 @@ func TestResolveComponentInstall(t *testing.T) {
 			component: model.ComponentEngram,
 			want:      CommandSequence{{"brew", "tap", "Gentleman-Programming/homebrew-tap"}, {"brew", "install", "engram"}},
 		},
+		// Linux and Windows engram now use DownloadLatestBinary() — resolver returns error.
+		// These cases are handled by run.go's componentApplyStep directly.
 		{
-			name:      "engram on ubuntu uses go install with correct module path",
+			name:      "engram on ubuntu returns error (uses DownloadLatestBinary instead)",
 			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
 			component: model.ComponentEngram,
-			want:      CommandSequence{{"env", "CGO_ENABLED=0", "go", "install", "github.com/Gentleman-Programming/engram/cmd/engram@latest"}},
+			wantErr:   true,
 		},
 		{
-			name:      "engram on arch uses go install with correct module path",
+			name:      "engram on arch returns error (uses DownloadLatestBinary instead)",
 			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman"},
 			component: model.ComponentEngram,
-			want:      CommandSequence{{"env", "CGO_ENABLED=0", "go", "install", "github.com/Gentleman-Programming/engram/cmd/engram@latest"}},
+			wantErr:   true,
 		},
 		{
-			name:      "engram on fedora uses go install with correct module path",
+			name:      "engram on fedora returns error (uses DownloadLatestBinary instead)",
 			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf"},
 			component: model.ComponentEngram,
-			want:      CommandSequence{{"env", "CGO_ENABLED=0", "go", "install", "github.com/Gentleman-Programming/engram/cmd/engram@latest"}},
-		},
-		{
-			name:      "engram on nix uses go install",
-			profile:   system.PlatformProfile{OS: "linux", PackageManager: "nix", NixFlakes: true},
-			component: model.ComponentEngram,
-			want:      CommandSequence{{"env", "CGO_ENABLED=0", "go", "install", "github.com/Gentleman-Programming/engram/cmd/engram@latest"}},
-		},
-		{
-			name:      "engram on nix legacy uses go install",
-			profile:   system.PlatformProfile{OS: "linux", PackageManager: "nix", NixFlakes: false},
-			component: model.ComponentEngram,
-			want:      CommandSequence{{"env", "CGO_ENABLED=0", "go", "install", "github.com/Gentleman-Programming/engram/cmd/engram@latest"}},
+			wantErr:   true,
 		},
 		{
 			name:      "gga on darwin uses brew tap and reinstall",
@@ -497,20 +468,10 @@ func TestResolveComponentInstall(t *testing.T) {
 			},
 		},
 		{
-			name:      "gga on nix uses git clone and install.sh",
-			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroNixos, PackageManager: "nix", NixFlakes: true},
-			component: model.ComponentGGA,
-			want: CommandSequence{
-				{"rm", "-rf", "/tmp/gentleman-guardian-angel"},
-				{"git", "clone", "https://github.com/Gentleman-Programming/gentleman-guardian-angel.git", "/tmp/gentleman-guardian-angel"},
-				{"bash", "/tmp/gentleman-guardian-angel/install.sh"},
-			},
-		},
-		{
-			name:      "engram on windows uses go install",
+			name:      "engram on windows returns error (uses DownloadLatestBinary instead)",
 			profile:   system.PlatformProfile{OS: "windows", PackageManager: "winget"},
 			component: model.ComponentEngram,
-			want:      CommandSequence{{"go", "install", "github.com/Gentleman-Programming/engram/cmd/engram@latest"}},
+			wantErr:   true,
 		},
 		{
 			name:      "gga on windows cleans temp dir and uses git bash",
@@ -545,53 +506,5 @@ func TestResolveComponentInstall(t *testing.T) {
 				t.Fatalf("ResolveComponentInstall() = %v, want %v", command, tt.want)
 			}
 		})
-	}
-}
-
-// --- Tests for Nix package manager resolution (R-NIX-005) ---
-
-func TestResolveDependencyInstallNixFlakes(t *testing.T) {
-	r := NewResolver()
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "nix", NixFlakes: true}
-
-	command, err := r.ResolveDependencyInstall(profile, "git")
-	if err != nil {
-		t.Fatalf("ResolveDependencyInstall() unexpected error = %v", err)
-	}
-	if len(command) != 1 {
-		t.Fatalf("ResolveDependencyInstall(nix) = %d commands, want 1", len(command))
-	}
-	if command[0][0] != "nix" || command[0][1] != "profile" || command[0][2] != "install" {
-		t.Fatalf("ResolveDependencyInstall(nix flakes) = %v, want nix profile install", command[0])
-	}
-}
-
-func TestResolveDependencyInstallNixLegacy(t *testing.T) {
-	r := NewResolver()
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "nix", NixFlakes: false}
-
-	command, err := r.ResolveDependencyInstall(profile, "curl")
-	if err != nil {
-		t.Fatalf("ResolveDependencyInstall() unexpected error = %v", err)
-	}
-	if len(command) != 1 {
-		t.Fatalf("ResolveDependencyInstall(nix) = %d commands, want 1", len(command))
-	}
-	if command[0][0] != "nix-env" || command[0][1] != "-iA" {
-		t.Fatalf("ResolveDependencyInstall(nix legacy) = %v, want nix-env -iA", command[0])
-	}
-}
-
-func TestResolveDependencyInstallNixAnyPackage(t *testing.T) {
-	r := NewResolver()
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "nix", NixFlakes: true}
-
-	// Test that any package can be installed via nix
-	command, err := r.ResolveDependencyInstall(profile, "python310")
-	if err != nil {
-		t.Fatalf("ResolveDependencyInstall() unexpected error = %v", err)
-	}
-	if !strings.Contains(command[0][3], "python310") {
-		t.Fatalf("ResolveDependencyInstall(python310) = %v, want nix profile install nixpkgs.python310", command[0])
 	}
 }

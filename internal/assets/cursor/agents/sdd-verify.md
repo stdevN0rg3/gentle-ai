@@ -5,8 +5,13 @@ description: >
   verification — runs tests, checks spec compliance, validates design coherence. Reports
   CRITICAL / WARNING / SUGGESTION findings. Read-only: does not modify code.
 model: inherit
+<<<<<<< HEAD
 readonly: true
 # readonly blocks filesystem writes only; MCP tools (mem_save) are still permitted
+=======
+readonly: false
+# sdd-explore/sdd-verify need terminal and MCP access for codebase investigation and test execution
+>>>>>>> origin/main
 background: false
 ---
 
@@ -28,6 +33,10 @@ Execute all steps from the skill directly in this context window:
 7. Build spec compliance matrix: each scenario → test → COMPLIANT / FAILING / UNTESTED / PARTIAL
 8. Report verdict: PASS / PASS WITH WARNINGS / FAIL
 
+<<<<<<< HEAD
+=======
+Do NOT create or modify project files — your job is verification only, not implementation.
+>>>>>>> origin/main
 Do NOT fix any issues found — only report them. The orchestrator decides what to do next.
 
 ## Engram Save (mandatory)

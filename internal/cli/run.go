@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -45,6 +46,14 @@ var (
 	runCommand          = executeCommand
 	cmdLookPath         = exec.LookPath
 	streamCommandOutput = true
+
+	// ggaAvailableCheck is an optional override for ggaAvailable behavior.
+	// When set, it is called instead of the default filesystem check.
+	ggaAvailableCheck func(system.PlatformProfile) bool
+
+	// engramDownloadFn is the function used to download the engram binary on non-brew platforms.
+	// Package-level var for testability — tests can replace this to avoid real HTTP calls.
+	engramDownloadFn = engram.DownloadLatestBinary
 
 	// AppVersion is the gentle-ai version that will be written into backup manifests.
 	// It is set by app.go before any CLI operation so that every backup created during
@@ -151,20 +160,11 @@ func withPostInstallNotes(report verify.Report, resolved planner.ResolvedPlan) v
 }
 
 // withGoInstallPathNote appends a PATH guidance note when engram was installed
-// via `go install` (non-brew platforms) and the Go binary directory is not in
-// the user's PATH. This helps users on Linux/Windows who may not have
-// ~/go/bin (or $GOPATH/bin / $GOBIN) in their PATH.
-// For NixOS (nix package manager), we use binary download to ~/.local/bin.
+// on a non-brew platform (Linux/Windows). Since engram is now installed via
+// direct binary download to /usr/local/bin or ~/.local/bin, this note helps
+// users who may need to add the install directory to their PATH.
 func withGoInstallPathNote(report verify.Report, resolved planner.ResolvedPlan) verify.Report {
 	if !hasComponent(resolved.OrderedComponents, model.ComponentEngram) {
-		return report
-	}
-	// For NixOS, binary is installed to ~/.local/bin
-	if resolved.PlatformDecision.PackageManager == "nix" {
-		if isInPATH("~/.local/bin") {
-			return report
-		}
-		report.FinalNote = report.FinalNote + "\n\nThe engram binary was installed to ~/.local/bin.\nAdd it to your PATH: echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc && source ~/.zshrc"
 		return report
 	}
 	if resolved.PlatformDecision.PackageManager == "brew" {
@@ -437,29 +437,30 @@ func (s componentApplyStep) Run() error {
 	case model.ComponentEngram:
 		if _, err := cmdLookPath("engram"); err != nil {
 			// Engram not on PATH — install it.
-			// On non-brew platforms (Linux, Windows), Go is required for `go install`.
-			if s.profile.PackageManager != "brew" {
-				if _, err := cmdLookPath("go"); err != nil {
-					goCommands := system.InstallCommandsForDep("go", s.profile)
-					if goCommands == nil {
-						return fmt.Errorf("go is required to install engram but cannot be auto-installed on this platform")
-					}
-					if err := runCommandSequence(goCommands); err != nil {
-						return fmt.Errorf("install go (required for engram): %w", err)
-					}
-					if s.profile.OS == "windows" {
-						if err := ensureGoAvailableAfterInstall(s.profile); err != nil {
-							return err
-						}
-					}
+			if s.profile.PackageManager == "brew" {
+				// macOS (or Linux with Homebrew): use brew tap + brew install.
+				commands, err := engram.InstallCommand(s.profile)
+				if err != nil {
+					return fmt.Errorf("resolve install command for component %q: %w", s.component, err)
 				}
-			}
-			commands, err := engram.InstallCommand(s.profile)
-			if err != nil {
-				return fmt.Errorf("resolve install command for component %q: %w", s.component, err)
-			}
-			if err := runCommandSequence(commands); err != nil {
-				return err
+				if err := runCommandSequence(commands); err != nil {
+					return err
+				}
+			} else {
+				// Linux / Windows: download the pre-built binary from GitHub Releases.
+				// No Go required — engram ships pre-built binaries.
+				binaryPath, err := engramDownloadFn(s.profile)
+				if err != nil {
+					return fmt.Errorf("download engram binary: %w", err)
+				}
+				// Add the install directory to PATH so subsequent commands
+				// (engram setup, engram.Inject → resolveEngramCommand) can find it.
+				// On Windows this also persists the change to the user registry via PowerShell.
+				binDir := filepath.Dir(binaryPath)
+				if err := system.AddToUserPath(binDir); err != nil {
+					// Non-fatal: warn but continue — the binary was downloaded successfully.
+					fmt.Fprintf(os.Stderr, "WARNING: could not add %s to PATH: %v\n", binDir, err)
+				}
 			}
 		}
 		setupMode := engram.ParseSetupMode(os.Getenv(engram.SetupModeEnvVar))
@@ -505,6 +506,7 @@ func (s componentApplyStep) Run() error {
 				OpenCodeModelAssignments: s.selection.ModelAssignments,
 				ClaudeModelAssignments:   s.selection.ClaudeModelAssignments,
 				WorkspaceDir:             s.workspaceDir,
+				StrictTDD:                s.selection.StrictTDD,
 			}
 			if _, err := sdd.Inject(s.homeDir, adapter, s.selection.SDDMode, opts); err != nil {
 				return fmt.Errorf("inject sdd for %q: %w", adapter.Agent(), err)
@@ -529,12 +531,36 @@ func (s componentApplyStep) Run() error {
 			if err != nil {
 				return fmt.Errorf("resolve install command for component %q: %w", s.component, err)
 			}
-			if err := runCommandSequence(commands); err != nil {
-				return err
+			installErr := runCommandSequence(commands)
+			if installErr != nil {
+				if ggaAvailable(s.profile) {
+					// The GGA install script uses `set -e` and `read -p` for
+					// the "already installed" confirmation. Without a TTY
+					// (common in automated/re-run scenarios), `read` fails
+					// with exit code 1 and `set -e` kills the script before
+					// it can exit 0. If GGA is actually available after the
+					// script ran, the install succeeded functionally — treat
+					// as success but warn the user.
+					fmt.Fprintf(os.Stderr, "WARNING: gga install command reported an error but gga is available — continuing. Error was: %v\n", installErr)
+				} else {
+					return installErr
+				}
 			}
 		}
 		if err := gga.EnsureRuntimeAssets(s.homeDir); err != nil {
 			return fmt.Errorf("ensure gga runtime assets: %w", err)
+		}
+		if runtime.GOOS == "windows" {
+			if err := gga.EnsurePowerShellShim(s.homeDir); err != nil {
+				return fmt.Errorf("ensure gga powershell shim: %w", err)
+			}
+			// Add GGA bin dir to the user PATH persistently on Windows.
+			// GGA's install.sh drops the binary into ~/bin which is not on PATH by default.
+			ggaBinDir := filepath.Join(s.homeDir, "bin")
+			if err := system.AddToUserPath(ggaBinDir); err != nil {
+				// Non-fatal: warn but continue — GGA was installed successfully.
+				fmt.Fprintf(os.Stderr, "WARNING: could not add %s to PATH: %v\n", ggaBinDir, err)
+			}
 		}
 		if _, err := gga.Inject(s.homeDir, s.agents); err != nil {
 			return fmt.Errorf("inject gga config: %w", err)
@@ -625,6 +651,10 @@ func ResolveInstallProfile(detection system.DetectionResult) system.PlatformProf
 // We check the filesystem directly to avoid spawning a subprocess and to work
 // regardless of whether the install directory has been added to PATH.
 func ggaAvailable(profile system.PlatformProfile) bool {
+	// Allow test override.
+	if ggaAvailableCheck != nil {
+		return ggaAvailableCheck(profile)
+	}
 	if _, err := cmdLookPath("gga"); err == nil {
 		return true
 	}
