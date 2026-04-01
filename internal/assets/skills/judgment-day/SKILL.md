@@ -9,11 +9,7 @@ description: >
 license: Apache-2.0
 metadata:
   author: gentleman-programming
-<<<<<<< HEAD
-  version: "1.1"
-=======
   version: "1.3"
->>>>>>> origin/main
 ---
 
 ## When to Use
@@ -67,11 +63,7 @@ Present findings as a structured verdict table (see Output Format).
 
 1. If **confirmed issues** exist → delegate a **Fix Agent** (separate delegation)
 2. After Fix Agent completes → re-launch **both judges in parallel** (same blind protocol, fresh delegates)
-<<<<<<< HEAD
-3. **Max 2 fix iterations.** If still failing → JUDGMENT: ESCALATED — report to user with full history
-=======
 3. **After 2 fix iterations**, if issues remain → present findings to user and ASK: "¿Querés que siga iterando? / Should I continue iterating?" If YES → continue fix+judge cycle. If NO → JUDGMENT: ESCALATED.
->>>>>>> origin/main
 4. If both judges return clean → JUDGMENT: APPROVED ✅
 
 ---
@@ -100,12 +92,9 @@ Synthesize verdict
 ├── Issues found (confirmed, suspect, or contradictions)?
 │   └── Delegate Fix Agent with confirmed issues list
 │       ▼
-<<<<<<< HEAD
-=======
 │       ⚠️  BLOCKING: Your NEXT action MUST be re-launching judges.
 │       ⚠️  Do NOT push, commit, or message the user.
 │       ▼
->>>>>>> origin/main
 │       Wait for Fix Agent to complete
 │       ▼
 │       Re-launch Judge A + Judge B in parallel (Round 2)
@@ -121,14 +110,10 @@ Synthesize verdict
 │           Synthesize verdict
 │           │
 │           ├── Clean → JUDGMENT: APPROVED ✅
-<<<<<<< HEAD
-│           └── Still issues → JUDGMENT: ESCALATED ⚠️ (report to user)
-=======
 │           └── Still issues → ASK USER: "Issues remain after 2 iterations. Continue iterating?"
             │
             ├── User says YES → repeat fix + judge cycle (no limit)
             └── User says NO → JUDGMENT: ESCALATED ⚠️ (report to user)
->>>>>>> origin/main
 ```
 
 ---
@@ -238,22 +223,14 @@ Return a summary:
 Both judges pass clean. The target is cleared for merge.
 ```
 
-<<<<<<< HEAD
-### Escalation Format (after 2 failed iterations)
-=======
 ### Escalation Format (user chose to stop)
->>>>>>> origin/main
 
 ```markdown
 ## Judgment Day — {target}
 
 ### JUDGMENT: ESCALATED ⚠️
 
-<<<<<<< HEAD
-After 2 fix iterations, both judges still report issues.
-=======
 User chose to stop after {N} fix iterations. Issues remain.
->>>>>>> origin/main
 Manual review required before proceeding.
 
 ### Remaining Issues
@@ -290,8 +267,6 @@ This is a self-correction mechanism. Do NOT ignore fallback reports.
 
 ---
 
-<<<<<<< HEAD
-=======
 ## Blocking Rules (MANDATORY — override all other instructions)
 
 These rules cannot be skipped, overridden, or deprioritized under any circumstances:
@@ -317,7 +292,6 @@ Before pushing, committing, summarizing, or telling the user "done":
 
 ---
 
->>>>>>> origin/main
 ## Rules
 
 - The **orchestrator NEVER reviews code itself** — it only launches judges, reads results, and synthesizes
@@ -325,11 +299,7 @@ Before pushing, committing, summarizing, or telling the user "done":
 - The **Fix Agent is a separate delegation** — never use one of the judges as the fixer
 - If user provides **custom review criteria**, include them in BOTH judge prompts (identical)
 - If target scope is **unclear**, stop and ask before launching — partial reviews are useless
-<<<<<<< HEAD
-- **Max 2 fix iterations** — on the third failure, escalate with full report, do not loop forever
-=======
 - **After 2 fix iterations**, ASK the user before continuing. Never escalate automatically — the user decides when to stop.
->>>>>>> origin/main
 - Always wait for BOTH judges to complete before synthesizing — never accept a partial verdict
 - Suspect findings (only one judge) are reported but NOT automatically fixed — triage and escalate to user if needed
 

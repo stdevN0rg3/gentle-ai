@@ -463,21 +463,13 @@ func TestUpdateHint(t *testing.T) {
 			name:    "engram linux",
 			tool:    ToolInfo{Name: "engram"},
 			profile: system.PlatformProfile{OS: "linux", PackageManager: "apt"},
-<<<<<<< HEAD
-			want:    "go install github.com/Gentleman-Programming/engram/cmd/engram@latest",
-=======
 			want:    "gentle-ai upgrade (downloads pre-built binary)",
->>>>>>> origin/main
 		},
 		{
 			name:    "engram windows",
 			tool:    ToolInfo{Name: "engram"},
 			profile: system.PlatformProfile{OS: "windows", PackageManager: "winget"},
-<<<<<<< HEAD
-			want:    "go install github.com/Gentleman-Programming/engram/cmd/engram@latest",
-=======
 			want:    "gentle-ai upgrade (downloads pre-built binary)",
->>>>>>> origin/main
 		},
 		{
 			name:    "gga macOS brew",
@@ -1022,10 +1014,6 @@ func TestNoUpdatesPath(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
-// TestInstallMethodFieldsOnRegistry verifies that InstallMethod is set on all tools
-// and that gentle-ai has a nil GoImportPath.
-=======
 // --- TestEngramHintNoBrew ---
 
 // TestEngramHintNoBrew verifies that on non-brew platforms, engramHint
@@ -1065,7 +1053,6 @@ func TestEngramHintNoBrew(t *testing.T) {
 }
 
 // TestInstallMethodFieldsOnRegistry verifies that InstallMethod is set on all tools.
->>>>>>> origin/main
 func TestInstallMethodFieldsOnRegistry(t *testing.T) {
 	for _, tool := range Tools {
 		if tool.InstallMethod == "" {
@@ -1073,16 +1060,6 @@ func TestInstallMethodFieldsOnRegistry(t *testing.T) {
 		}
 	}
 
-<<<<<<< HEAD
-	// gentle-ai: brew on macOS, binary on linux/windows
-	// engram: go-install (no brew variant needed for this check)
-	// gga: brew on macOS, binary elsewhere
-	for _, tool := range Tools {
-		switch tool.Name {
-		case "engram":
-			if tool.GoImportPath == "" {
-				t.Errorf("engram must have GoImportPath set (go-install method)")
-=======
 	// engram: uses binary download (not go-install) — GoImportPath must be empty.
 	for _, tool := range Tools {
 		switch tool.Name {
@@ -1092,7 +1069,6 @@ func TestInstallMethodFieldsOnRegistry(t *testing.T) {
 			}
 			if tool.GoImportPath != "" {
 				t.Errorf("engram GoImportPath should be empty (binary download, not go-install), got %q", tool.GoImportPath)
->>>>>>> origin/main
 			}
 		}
 	}

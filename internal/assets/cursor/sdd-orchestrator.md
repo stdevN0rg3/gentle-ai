@@ -66,7 +66,8 @@ Skills (appear in autocomplete):
 - `/sdd-explore <topic>` → investigate an idea; reads codebase, compares approaches; no files created
 - `/sdd-apply [change]` → implement tasks in batches; checks off items as it goes
 - `/sdd-verify [change]` → validate implementation against specs; reports CRITICAL / WARNING / SUGGESTION
-- `/sdd-archive [change]` → close a change and persist final state in the active artifact store
+- `/sdd-archive [change]` → close a change and persist final state in the active artifact store 
+- `/sdd-onboard` → guided end-to-end walkthrough of SDD using your real codebase
 
 Meta-commands (type directly — orchestrator handles them, won't appear in autocomplete):
 - `/sdd-new <change>` → start a new change by invoking `sdd-explore` then `sdd-propose` subagents
@@ -75,8 +76,6 @@ Meta-commands (type directly — orchestrator handles them, won't appear in auto
 
 `/sdd-new`, `/sdd-continue`, and `/sdd-ff` are meta-commands handled by YOU. Do NOT invoke them as skills. You orchestrate the subagent sequence yourself.
 
-<<<<<<< HEAD
-=======
 ### SDD Init Guard (MANDATORY)
 
 Before executing ANY SDD command (`/sdd-new`, `/sdd-ff`, `/sdd-continue`, `/sdd-explore`, `/sdd-apply`, `/sdd-verify`, `/sdd-archive`), check if `sdd-init` has been run for this project:
@@ -111,7 +110,6 @@ In **Interactive** mode, between phases:
 
 For this agent (inline subagents): phases already run with user visibility between invocations. **Interactive** is the default behavior — show results between subagent calls and ask before proceeding. **Automatic** means invoke subagents sequentially without pausing to ask between phases.
 
->>>>>>> origin/main
 ### Dependency Graph
 ```
 proposal -> specs --> tasks -> apply -> verify -> archive

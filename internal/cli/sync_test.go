@@ -1342,8 +1342,6 @@ func TestRunSyncRollsBackOnFailure(t *testing.T) {
 		t.Errorf("settings file was truncated to empty after sync/rollback")
 	}
 }
-<<<<<<< HEAD
-=======
 
 // ─── Task 5: --strict-tdd flag ───────────────────────────────────────────────
 
@@ -1394,4 +1392,3 @@ func TestBuildSyncSelectionStrictTDD(t *testing.T) {
 		t.Errorf("Selection.StrictTDD = true, want false")
 	}
 }
->>>>>>> origin/main

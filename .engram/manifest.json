@@ -16,8 +16,6 @@
       "sessions": 0,
       "memories": 8,
       "prompts": 1
-<<<<<<< HEAD
-=======
     },
     {
       "id": "be4ddc87",
@@ -26,7 +24,6 @@
       "sessions": 1,
       "memories": 14,
       "prompts": 1
->>>>>>> origin/main
     }
   ]
 }
